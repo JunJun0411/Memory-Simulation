@@ -85,13 +85,29 @@ void initprocTable(struct procEntry *procTable, int numProcess){
 	}
 }
 
+void LRU(struct framePage *phyMemFrames, int fnum){
+	int lnum, rnum, newF;
+	lnum = phyMemFrames[fnum].lruLeft->number;
+	rnum = phyMemFrames[fnum].lruRight->number;
+	newF = newestFrame->number;
+
+	// Hit Frame 링크에서 삭제
+	phyMemFrames[lnum].lruRight = &phyMemFrames[rnum];
+	phyMemFrames[rnum].lruLeft = &phyMemFrames[lnum];
+	// Hit Frame 선두로
+	phyMemFrames[fnum].lruRight = &phyMemFrames[newF];
+	phyMemFrames[fnum].lruLeft = &phyMemFrames[newestFrame->lruLeft->number];
+	phyMemFrames[newF].lruLeft = &phyMemFrames[fnum];
+	phyMemFrames[phyMemFrames[fnum].lruLeft->number].lruRight = &phyMemFrames[fnum];
+}
+
 void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, char FIFOorLRU) {
-	int i;
-	unsigned Vaddr, Paddr, idx, j;
+	int i, fnum, lnum, rnum, newF;
+	unsigned Vaddr, Paddr, idx;
 	char rw;
 	char fullFrame = 0;
-		
-	for (i = 0, j = 0; EOF!=fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {			
+	newestFrame = &phyMemFrames[0];
+	for (i = 0 ; EOF!=fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {			
 		// write to pageTable
 		Paddr = (Vaddr % PageSize);
 		idx = (Vaddr / PageSize);
@@ -100,65 +116,53 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 		if(procTable[i].firstLevelPageTable[idx].valid == 0) {
 			// pageWrite
 			procTable[i].firstLevelPageTable[idx].valid = 1;
-			procTable[i].firstLevelPageTable[idx].frameNumber = j;
+			procTable[i].firstLevelPageTable[idx].frameNumber = newestFrame->number;
 			procTable[i].numPageFault++;
 			
 			// 변경되는 PageTableEntry의 vaildbit = 0 으로 셋팅
-			if(phyMemFrames[j].virtualPageNumber != -1){
-				procTable[i].firstLevelPageTable[phyMemFrames[j].virtualPageNumber].valid = 0;	
+			if(phyMemFrames[newestFrame->number].virtualPageNumber != -1){
+				procTable[i].firstLevelPageTable[phyMemFrames[newestFrame->number].virtualPageNumber].valid = 0;	
 			}
 			// write to phyMemFrameTable
-			phyMemFrames[j].pid = i;
-			phyMemFrames[j].virtualPageNumber = idx;
-			Paddr += j * PageSize;
+			newestFrame->pid = i;
+			newestFrame->virtualPageNumber = idx;
+			if(FIFOorLRU && fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
 
-			// Physical memory not all-used
-			if(!fullFrame) {
-				j++;
-				// FIFOorLRU action
-				if(j==nFrame) {
-					fullFrame = 1;
-					j %=nFrame;
-				}
-			}
-			if(fullFrame){
-				// FIFO 
-				if(!FIFOorLRU)	{
-					j %= nFrame;
-					fullFrame = 0;
-				}
-				// oldestFrame의 오른쪽Frame을 oldestFrame으로 포인터
-				else {
-					oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
-					j = oldestFrame->number;
-				}
-			}	
+			Paddr += newestFrame->number * PageSize;
 			
+			
+			// FIFO의 경우
+			if(!FIFOorLRU){
+				newestFrame = &phyMemFrames[newestFrame->lruRight->number];
+			}
+			// LRU의 경우
+			else{
+				if(newestFrame->number == nFrame - 1) fullFrame = 1;
+				newestFrame = &phyMemFrames[newestFrame->lruRight->number];
+				if(fullFrame){
+					// oldestFrame을 교체해야하는 경우
+					newestFrame = &phyMemFrames[oldestFrame->number];
+				}	
+			}	
+		}
 
-		}	
-	
-	
 		// Hit
 		else if (procTable[i].firstLevelPageTable[idx].valid == 1) {
 			Paddr += procTable[i].firstLevelPageTable[idx].frameNumber * PageSize;
 			procTable[i].numPageHit++;
 			// LRU
 			if (FIFOorLRU) {
-				if (phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].number != j) {
-					// Hit한 Frame 링크에서 삭제
-					phyMemFrames[phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruLeft->number].lruRight = &phyMemFrames[phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruRight->number];
-					phyMemFrames[phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruRight->number].lruLeft = &phyMemFrames[phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruLeft->number];
-					// Hit한 Frame 선두로 이동
-					phyMemFrames[phyMemFrames[j].lruLeft->number].lruRight = &phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber];
-					phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruLeft = &phyMemFrames[phyMemFrames[j].lruLeft->number];
-					phyMemFrames[j].lruLeft = &phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber];
-					phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].lruRight = &phyMemFrames[j];
-				}
-				else {
+				// Hit Frame의 number
+				fnum = procTable[i].firstLevelPageTable[idx].frameNumber;
+				// oldestFrame과 Hit Frame이 같은경우
+				if(oldestFrame->number == fnum) {
 					oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
-					j = oldestFrame->number;
+					// phyMem 가득찬 경우
+					if(fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
+					else LRU(phyMemFrames, fnum);
 					
 				}
+				else LRU(phyMemFrames, fnum);
 			}
 		}
 		
