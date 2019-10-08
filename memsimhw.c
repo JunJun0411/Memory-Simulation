@@ -181,20 +181,48 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 
 void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) {
    	int i;
-	unsigned Vaddr, Paddr, idx;
+	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
-        char fullFrame = 0;
+    char fullFrame = 0;
 
 	for (i = 0 ; EOF!=fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
-  		Paddr = Vaddr
+		Paddr = (Vaddr % PageSize);
+		// twoLevelIndex
+		idxT = (Vaddr / PageSize) % (1 << twoLevelBits);
+		// oneLevelIndex
+		idxF = (Vaddr / (1 << (PAGESIZEBITS + twoLevelBits)));
+		
+		// Miss
+		if (procTable[i].firstLevelPageTable[idxF].valid == 0 || procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid==0 || 
+			idxT !=phyMemFrames[procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber].virtualPageNumber ||
+			i != phyMemFrames[procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber].pid) {
+			// Page Fault
+			procTable[i].numPageFault++;
+
+			// firstLevelPage가 없는 경우 할당
+			if (procTable[i].firstLevelPageTable[idxF].valid == 0) {
+				procTable[i].firstLevelPageTable[idxF].valid = 1;
+				procTable[i].firstLevelPageTable[idxF].level = 1;
+				procTable[i].firstLevelPageTable[idxF].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << twoLevelBits));
+			}
+			procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid = 1;
+			procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].level = 2;
+			procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber = newestFrame->number;
 
 
 
+
+		}
+		
+		// Hit
+		else {
+
+		}
 
 
 
 		// -s option print statement
-        	if(s_flag) printf("Two-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces,Vaddr,Paddr);
+			if(s_flag) printf("Two-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces, Vaddr, Paddr); 
 	}
         for(i=0; i < numProcess; i++) {
                 printf("**** %s *****\n",procTable[i].traceName);
