@@ -126,34 +126,27 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 
 			// 모든 Frame 사용되는 중이며 LRU의 경우
 			if(FIFOorLRU && fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
+			if(newestFrame->number == nFrame - 1) fullFrame = 1;
 
 			// physical Frame Number
 			Paddr += newestFrame->number * PageSize;
 			
 			
-			// FIFO의 경우
-			if(!FIFOorLRU){
-				newestFrame = &phyMemFrames[newestFrame->lruRight->number];
-			}
-			// LRU의 경우
-			else{
-				if(newestFrame->number == nFrame - 1) fullFrame = 1;
-				newestFrame = &phyMemFrames[newestFrame->lruRight->number];
-				if(fullFrame){
-					// oldestFrame을 교체해야하는 경우
-					newestFrame = &phyMemFrames[oldestFrame->number];
-				}	
-			}	
+			newestFrame = &phyMemFrames[newestFrame->lruRight->number];
+			// 모든 Frame 사용되는 중이며 LRU의경우에서 oldestFrame 교체해야하는 경우
+			if(FIFOorLRU && fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
 		}
 
 		// Hit
 		else {
-			Paddr += procTable[i].firstLevelPageTable[idx].frameNumber * PageSize;
+			// Hit Frame의 number
+			fnum = procTable[i].firstLevelPageTable[idx].frameNumber;
+			
+			Paddr += fnum * PageSize;
 			procTable[i].numPageHit++;
+			
 			// LRU
 			if (FIFOorLRU) {
-				// Hit Frame의 number
-				fnum = procTable[i].firstLevelPageTable[idx].frameNumber;
 				// oldestFrame과 Hit Frame이 같은경우
 				if(oldestFrame->number == fnum) {
 					oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
@@ -187,13 +180,13 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
    	int i, j, fnum;
 	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
-    char fullFrame = 0;
+    	char fullFrame = 0;
 
 	for (i = 0 ; EOF!=fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
 		Paddr = (Vaddr % PageSize);
 		// twoLevelIndex
-		idxT = (Vaddr / PageSize) % (1 << twoLevelBits);
+		idxT = ((Vaddr % (1 << (PAGESIZEBITS + twoLevelBits))) / PageSize);
 		// oneLevelIndex
 		idxF = (Vaddr / (1 << (PAGESIZEBITS + twoLevelBits)));
 		
@@ -219,19 +212,18 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 			// Write in phyMemFrameTable
 			phyMemFrames[newestFrame->number].pid = i;
 			phyMemFrames[newestFrame->number].virtualPageNumber = idxT;
+
 			if (fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
+			if (newestFrame->number == nFrame - 1) fullFrame = 1;
 
 			// physical Frame Number
 			Paddr += newestFrame->number * PageSize;
 
-			if (newestFrame->number == nFrame - 1) fullFrame = 1;
-			
+			// 다음 교체해야할 newestFrame을 오른쪽 포인터으로 넘김
 			newestFrame = &phyMemFrames[newestFrame->lruRight->number];
 
-			if (fullFrame) {
-				// oldestFrame을 교체해야하는 경우
-				newestFrame = &phyMemFrames[oldestFrame->number];
-			}
+			// oldestFrame을 교체해야하는 경우
+			if (fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
 		}
 		
 		// Hit
@@ -252,10 +244,10 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 			else LRU(phyMemFrames, fnum);
 		}
 
-
+		procTable[i].ntraces++;
 
 		// -s option print statement
-			if(s_flag) printf("Two-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces, Vaddr, Paddr); 
+		if(s_flag) printf("Two-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces, Vaddr, Paddr); 
 	}
         for(i=0; i < numProcess; i++) {
                 printf("**** %s *****\n",procTable[i].traceName);
@@ -264,7 +256,8 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
                 printf("Proc %d Num of Page Faults %d\n",i,procTable[i].numPageFault);
                 printf("Proc %d Num of Page Hit %d\n",i,procTable[i].numPageHit);
                 assert(procTable[i].numPageHit + procTable[i].numPageFault == procTable[i].ntraces);
-				free(procTable[i].firstLevelPageTable); 
+		
+		free(procTable[i].firstLevelPageTable); 
         }
 }
 
@@ -292,7 +285,7 @@ int main(int argc, char *argv[]) {
 		printf("firstLevelBits %d is too Big for the 2nd level page system\n", firstLevelBits); exit(1);
 	}
 
-	twoLevelBits = phyMemSizeBits - PAGESIZEBITS - firstLevelBits;
+	twoLevelBits = VIRTUALADDRBITS - PAGESIZEBITS - firstLevelBits;
 
 	// 프로세스의 갯수
 	numProcess = argc - s_flag - 4;
@@ -351,3 +344,4 @@ int main(int argc, char *argv[]) {
 		
 	return(0);
 }
+
