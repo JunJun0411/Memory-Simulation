@@ -27,6 +27,7 @@ struct framePage {
 	int number;			// frame number
 	int pid;			// Process id that owns the frame
 	int virtualPageNumber;		// virtual page number using the frame
+	int firstVirtualPageNumber;
 	struct framePage *lruLeft;	// for LRU circular doubly linked list
 	struct framePage *lruRight; 	// for LRU circular doubly linked list
 };
@@ -64,6 +65,7 @@ void initPhyMem(struct framePage *phyMem, int nFrame) {
 		phyMem[i].number = i;
 		phyMem[i].pid = -1;
 		phyMem[i].virtualPageNumber = -1;
+		phyMem[i].firstVirtualPageNumber = -1;
 		phyMem[i].lruLeft = &phyMem[(i-1+nFrame) % nFrame];
 		phyMem[i].lruRight = &phyMem[(i+1+nFrame) % nFrame];
 	}
@@ -113,11 +115,12 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 		Paddr = (Vaddr % PageSize);
 		idx = (Vaddr / PageSize);
 		
-		// PageFault(miss)
+		// Miss
 		if(procTable[i].firstLevelPageTable[idx].valid == 0) {
 			// Write in pageTable
 			procTable[i].firstLevelPageTable[idx].valid = 1;
 			procTable[i].firstLevelPageTable[idx].frameNumber = newestFrame->number;
+			// PageFault
 			procTable[i].numPageFault++;
 			
 			// 모든 Frame 사용되는 중이며 LRU의 경우 원래 차지중이던 프로세스의 PageEntry의 vaild bit을 0으로 변경
@@ -184,7 +187,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 }
 
 void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) {
-   	int i, j, fnum;
+   	int i, j, fnum, bpid, bfidx, btidx;
 	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
     	char fullFrame = 0;
@@ -197,10 +200,8 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 		// oneLevelIndex
 		idxF = (Vaddr / (1 << (PAGESIZEBITS + twoLevelBits)));
 		
-		// Miss 1LevelPage.vaild=0 인경우, 2LevelPage.vaild=0인경우, 접근하는 vpn과 FramePage의 vpn이 다른 경우, 접근하는 pid와 FramePage의 pid가 다른경우
-		if (procTable[i].firstLevelPageTable[idxF].valid == 0 || procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid==0 || 
-			idxT !=phyMemFrames[procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber].virtualPageNumber ||
-			i != phyMemFrames[procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber].pid) {
+		// Miss 1LevelPage.vaild=0 인경우 2LevelPage.vaild=0인경우
+		if (procTable[i].firstLevelPageTable[idxF].valid == 0 || procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid==0) { 
 			// Page Fault
 			procTable[i].numPageFault++;
 
@@ -216,10 +217,20 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 			procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].level = 2;
 			procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].frameNumber = newestFrame->number;
 
+			// 대체될 경우 phyMemFrame에서 page-out 되어 pageTable의 vaild bit을 0으로 셋팅
+			if(fullFrame) {
+				bpid = phyMemFrames[newestFrame->number].pid;
+				btidx = phyMemFrames[newestFrame->number].virtualPageNumber;
+				bfidx = phyMemFrames[newestFrame->number].firstVirtualPageNumber;
+				procTable[bpid].firstLevelPageTable[bfidx].secondLevelPageTable[btidx].valid = 0;
+			}
+
 			// Write in phyMemFrameTable
 			phyMemFrames[newestFrame->number].pid = i;
 			phyMemFrames[newestFrame->number].virtualPageNumber = idxT;
+			phyMemFrames[newestFrame->number].firstVirtualPageNumber = idxF;
 
+			// 모든 Mem사용된경우 oldestFrame의 포인터를 오른쪽으로 이동
 			if (fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
 			if (newestFrame->number == nFrame - 1) fullFrame = 1;
 
