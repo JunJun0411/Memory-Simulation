@@ -104,7 +104,7 @@ void LRU(struct framePage *phyMemFrames, int fnum){
 }
 
 void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, char FIFOorLRU) {
-	int i, fnum;
+	int i, fnum, bpid, bidx;
 	unsigned Vaddr, Paddr, idx;
 	char rw;
 	char fullFrame = 0;
@@ -114,19 +114,26 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 		idx = (Vaddr / PageSize);
 		
 		// PageFault(miss)
-		if(procTable[i].firstLevelPageTable[idx].valid == 0 || procTable[i].pid != phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].pid || idx != phyMemFrames[procTable[i].firstLevelPageTable[idx].frameNumber].virtualPageNumber) {
+		if(procTable[i].firstLevelPageTable[idx].valid == 0) {
 			// Write in pageTable
 			procTable[i].firstLevelPageTable[idx].valid = 1;
 			procTable[i].firstLevelPageTable[idx].frameNumber = newestFrame->number;
 			procTable[i].numPageFault++;
 			
+			// 모든 Frame 사용되는 중이며 LRU의 경우 원래 차지중이던 프로세스의 PageEntry의 vaild bit을 0으로 변경
+			if (fullFrame) {
+				bpid = phyMemFrames[newestFrame->number].pid;
+				bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
+				procTable[bpid].firstLevelPageTable[bidx].valid = 0;
+			}
+
 			// Write in phyMemFrameTable
 			phyMemFrames[newestFrame->number].pid = i;
 			phyMemFrames[newestFrame->number].virtualPageNumber = idx;
 
 			// 모든 Frame 사용되는 중이며 LRU의 경우
-			if(FIFOorLRU && fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
-			if(newestFrame->number == nFrame - 1) fullFrame = 1;
+			if (FIFOorLRU && fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
+			if (newestFrame->number == nFrame - 1) fullFrame = 1;
 
 			// physical Frame Number
 			Paddr += newestFrame->number * PageSize;

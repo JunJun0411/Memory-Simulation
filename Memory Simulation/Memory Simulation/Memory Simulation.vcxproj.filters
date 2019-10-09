@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\memsimhw.c">
+    <ClCompile Include="..\..\memsimhw3.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
