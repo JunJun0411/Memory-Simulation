@@ -338,6 +338,7 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 				struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
 				bIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
 				nIPT = iPT[hidx].next;
+
 				// Search
 				while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
 					bIPT = nIPT;
@@ -353,6 +354,7 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 					bIPT->next = nIPT->next;
 				}
 				free(nIPT);
+				free(bIPT);
 			}
 
 			// Write in phyMemFrameTable			
@@ -375,7 +377,6 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 		}
 
-		// LRU필요!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 		// Collision 
 		else {
 			procTable[i].numIHTConflictAccess++;
@@ -394,19 +395,17 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 			// entry에서 찾은 경우 pageHit
 			if (cIPT->pid == i || cIPT->virtualPageNumber == idx) {
 				procTable[i].numPageHit++;
-				// entry의 next가 있는 경우
-				if (cIPT->next != NULL) {
-					// 노드 삭제 후 선두로 이동
-					dIPT->next = cIPT->next;
-					cIPT->next = iPT[hashIdx].next;
-					iPT[hashIdx].next = cIPT;
+				fnum = cIPT->frameNumber;
+				Paddr += fnum * PageSize;
+
+				// oldestFrame과 Hit Frame이 같은경우
+				if (oldestFrame->number == fnum) {
+					oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
+					// phyMem 가득찬 경우
+					if (fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
+					else LRU(phyMemFrames, fnum);
 				}
-				// 없는경우
-				else {
-					dIPT->next = NULL;
-					cIPT->next = iPT[hashIdx].next;
-					iPT[hashIdx].next = cIPT;
-				}
+				else LRU(phyMemFrames, fnum);
 			}
 
 			// 못 찾은 경우 pageFault
@@ -421,6 +420,55 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 				// 선두에 entry 추가
 				new1IPT->next = iPT[hashIdx].next;
 				iPT[hashIdx].next = new1IPT;
+
+				// page-out : 대체될 경우 phyMemFrame에 hashTable에서 할당하고 있는 entry 삭제
+				if (fullFrame) {
+					bpid = phyMemFrames[newestFrame->number].pid;
+					bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
+					hidx = phyMemFrames[newestFrame->number].hashEntryNumber;
+					struct invertedPageTableEntry *nIPT;	// 삭제할 entry
+					nIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
+					struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
+					bIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
+					nIPT = iPT[hidx].next;
+
+					// Search
+					while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
+						bIPT = nIPT;
+						nIPT = nIPT->next;
+					}
+					// 못 찾은경우 error
+					if (nIPT->pid != bpid || nIPT->frameNumber != bidx) {
+						printf("HashTable에 삭제할 entry가 존재하지 않습니다 \n");
+						exit(1);
+					}
+					// 찾은 entry의 next가 있는 경우 
+					if (nIPT->next != NULL) {
+						bIPT->next = nIPT->next;
+					}
+					free(nIPT);
+					free(bIPT);
+				}
+
+				// Write in phyMemFrameTable			
+				phyMemFrames[newestFrame->number].pid = i;
+				phyMemFrames[newestFrame->number].virtualPageNumber = idx;
+				phyMemFrames[newestFrame->number].hashEntryNumber = hashIdx;
+
+				// 모든 Frame들이 사용되고 있는 경우 oldestFrame의 포인터를 오른쪽으로 이동
+				if (fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
+				if (newestFrame->number == nFrame - 1) fullFrame = 1;
+
+				// physical Frame Number
+				Paddr += newestFrame->number * PageSize;
+
+				// 다음 교체해야할 newestFrame을 오른쪽 포인터으로 넘김
+				newestFrame = &phyMemFrames[newestFrame->lruRight->number];
+
+				// oldestFrame을 교체해야하는 경우
+				if (fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
+
+				free(new1IPT);
 			}
 		}
 
@@ -447,7 +495,7 @@ int main(int argc, char *argv[]) {
 	int i;
 
 	// -s option
-	if (argv[1][0] == '-') {
+	if (argv[1][0] == '-' && argv[1][1] == 's') {
 		s_flag++;
 	}
 
@@ -492,7 +540,7 @@ int main(int argc, char *argv[]) {
 	phyMemFrames = (struct framePage *)malloc(sizeof(struct framePage) * nFrame);
 	
 	// oneLevel일 경우
-	if (argv[s_flag + 1][0] == '0') {
+	if (argv[s_flag + 1][0] == '0' || argv[s_flag + 1][0] == '3') {
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
 		printf("The One-Level Page Table with FIFO Memory Simulation Starts .....\n");
@@ -512,7 +560,7 @@ int main(int argc, char *argv[]) {
 
 	}
 	// twoLevel일 경우
-	else if (argv[s_flag + 1][0] == '1') {
+	if (argv[s_flag + 1][0] == '1' || argv[s_flag + 1][0] == '3') {
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
 		printf("The Two-Level Page Table Memory Simulation Starts .....\n");
@@ -523,7 +571,7 @@ int main(int argc, char *argv[]) {
 		twoLevelVMSim(procTable, phyMemFrames);
 	}
 	// inverted의 경우
-	else if (argv[s_flag + 1][0] == '2') {
+	if (argv[s_flag + 1][0] == '2' || argv[s_flag + 1][0] == '3') {
 
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
