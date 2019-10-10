@@ -1,0 +1,14 @@
+./a.out 0 10 32 ../mtraces/bzip10.trace ../mtraces/gcc10.trace
+./a.out 0 10 32 ../mtraces/bzip100.trace   ../mtraces/gcc100.trace   
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/0.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/gcc.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/random0.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/random2.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/swim.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/1.trace
+./a.out 0 10 32 ../mtraces/bzip.trace ../mtraces/sixpack.trace
+./a.out 0 10 32 ../mtraces/sixpack.trace ../mtraces/gcc.trace
+./a.out 0 10 32 ../mtraces/1.trace ../mtraces/gcc.trace
+./a.out 0 10 32 ../mtraces/random2.trace ../mtraces/gcc.trace
+./a.out 0 10 32 ../mtraces/random0.trace ../mtraces/random2.trace
+./a.out 0 10 32 ../mtraces/random0.trace ../mtraces/swim.trace ../mtraces/random2.trace

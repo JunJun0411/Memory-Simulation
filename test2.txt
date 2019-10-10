@@ -1,0 +1,14 @@
+./memsim 0 10 32 ../mtraces/bzip10.trace ../mtraces/gcc10.trace
+./memsim 0 10 32 ../mtraces/bzip100.trace   ../mtraces/gcc100.trace   
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/0.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/gcc.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/random0.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/random2.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/swim.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/1.trace
+./memsim 0 10 32 ../mtraces/bzip.trace ../mtraces/sixpack.trace
+./memsim 0 10 32 ../mtraces/sixpack.trace ../mtraces/gcc.trace
+./memsim 0 10 32 ../mtraces/1.trace ../mtraces/gcc.trace
+./memsim 0 10 32 ../mtraces/random2.trace ../mtraces/gcc.trace
+./memsim 0 10 32 ../mtraces/random0.trace ../mtraces/random2.trace
+./memsim 0 10 32 ../mtraces/random0.trace ../mtraces/swim.trace ../mtraces/random2.trace

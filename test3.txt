@@ -1,0 +1,14 @@
+0.trace
+bzip10.trace
+gcc10.trace
+random0.trace
+random2.trace
+swim.trace
+1.trace
+bzip.trace
+gcc.trace
+sixpack.trace
+bzip100.trace
+gcc100.trace
+gcc1000.trace
+변경할것 숫자, 파일수, 파일명
