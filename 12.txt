@@ -1,0 +1,13 @@
+// entry의 next가 있는 경우
+				if (cIPT->next != NULL) {
+					// 노드 삭제 후 선두로 이동
+					dIPT->next = cIPT->next;
+					cIPT->next = iPT[hashIdx].next;
+					iPT[hashIdx].next = cIPT;
+				}
+				// 없는경우
+				else {
+					dIPT->next = NULL;
+					cIPT->next = iPT[hashIdx].next;
+					iPT[hashIdx].next = cIPT;
+				}
