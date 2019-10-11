@@ -1,0 +1,27 @@
+﻿  memsimhw3.c
+c:\users\jun\desktop\memory simulation\memsimhw3.c : warning C4819: 현재 코드 페이지(949)에서 표시할 수 없는 문자가 파일에 들어 있습니다. 데이터가 손실되지 않게 하려면 해당 파일을 유니코드 형식으로 저장하십시오.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(161): error C2181: if와 짝을 이루지 않는 잘못된 else문입니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(121): warning C4996: 'fscanf': This function or variable may be unsafe. Consider using fscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17763.0\ucrt\stdio.h(1197): note: 'fscanf' 선언을 참조하십시오.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2059: 구문 오류: 'for'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2143: 구문 오류: '{'이(가) '<' 앞에 없습니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2059: 구문 오류: '<'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2143: 구문 오류: '{'이(가) '++' 앞에 없습니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2059: 구문 오류: '++'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(189): error C2059: 구문 오류: ')'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(197): error C2059: 구문 오류: '}'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2059: 구문 오류: 'for'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2143: 구문 오류: '{'이(가) '<' 앞에 없습니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2059: 구문 오류: '<'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2143: 구문 오류: '{'이(가) '++' 앞에 없습니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2059: 구문 오류: '++'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(280): error C2059: 구문 오류: ')'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(290): error C2059: 구문 오류: '}'
+c:\users\jun\desktop\memory simulation\memsimhw3.c(331): warning C4013: 'CreateNode'이(가) 정의되지 않았습니다. extern은 int형을 반환하는 것으로 간주합니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(317): warning C4996: 'fscanf': This function or variable may be unsafe. Consider using fscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17763.0\ucrt\stdio.h(1197): note: 'fscanf' 선언을 참조하십시오.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(331): warning C4047: '초기화 중': 'invertedPageTableEntry *'의 간접 참조 수준이 'int'과(와) 다릅니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(418): warning C4047: '초기화 중': 'invertedPageTableEntry *'의 간접 참조 수준이 'int'과(와) 다릅니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(566): warning C4013: 'twoLevelVMSim'이(가) 정의되지 않았습니다. extern은 int형을 반환하는 것으로 간주합니다.
+c:\users\jun\desktop\memory simulation\memsimhw3.c(523): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.17763.0\ucrt\stdio.h(208): note: 'fopen' 선언을 참조하십시오.

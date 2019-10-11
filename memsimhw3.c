@@ -28,7 +28,6 @@ struct framePage {
 	int pid;						// Process id that owns the frame
 	int virtualPageNumber;			// virtual page number using the frame
 	int firstVirtualPageNumber;
-	int hashEntryNumber;
 	struct framePage *lruLeft;		// for LRU circular doubly linked list
 	struct framePage *lruRight; 	// for LRU circular doubly linked list
 };
@@ -67,7 +66,6 @@ void initPhyMem(struct framePage *phyMem, int nFrame) {
 		phyMem[i].pid = -1;
 		phyMem[i].virtualPageNumber = -1;
 		phyMem[i].firstVirtualPageNumber = -1;
-		phyMem[i].hashEntryNumber = -1;
 		phyMem[i].lruLeft = &phyMem[(i-1+nFrame) % nFrame];
 		phyMem[i].lruRight = &phyMem[(i+1+nFrame) % nFrame];
 	}
@@ -123,7 +121,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 	char rw;
 	char fullFrame = 0;
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
-		
+
 		// offset
 		Paddr = (Vaddr % PageSize);
 		// VPN
@@ -160,6 +158,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 			// 모든 Frame 사용되는 중이며 LRU의경우에서 oldestFrame 교체해야하는 경우
 			if (FIFOorLRU && fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
 		}
+	
 
 		// Hit
 		else {
@@ -187,7 +186,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 
 		// -s option print statement
 		if (s_flag) printf("One-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces, Vaddr, Paddr);
-	}
+		}
 
 	// 출력	
 	for (i = 0; i < numProcess; i++) {
@@ -293,12 +292,25 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 		free(procTable[i].firstLevelPageTable);
 	}
 }
+struct invertedPageTableEntry* CreateNode(int id, int vpn, int newNum ,struct invertedPageTableEntry *hashIPT, char check) { 
+	struct invertedPageTableEntry * NewNode = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
+	NewNode->pid = id; 
+	NewNode->virtualPageNumber = vpn;
+	NewNode->frameNumber = newNum;
+	if(check) {
+		NewNode->next = hashIPT->next;
+	}
+	else NewNode->next = NULL; 
+	hashIPT->next = &*NewNode;
 
-void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) {
-	int i, fnum, bpid, bidx, hidx;
+	return NewNode; 
+}
+void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, int nFrame) {
+	int i, fnum;
 	unsigned Vaddr, Paddr, hashIdx, idx;
 	char rw;
 	char fullFrame = 0;
+
 
 	// invertedPageTable 생성
 	struct invertedPageTableEntry *iPT;
@@ -306,7 +318,7 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 	// invertedPageTable 초기화
 	initinvertedPageTableEntry(iPT, nFrame);
 
-
+	
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
 		Paddr = (Vaddr % PageSize);
@@ -317,51 +329,46 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 		// Empty entry일 경우
 		if (iPT[hashIdx].next == NULL) {
+	//		printf("Empty MISS %d\n", hashIdx);
 			procTable[i].numIHTNULLAccess++;
 			procTable[i].numPageFault++;
-			struct invertedPageTableEntry *newIPT;
-			newIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
-			newIPT->pid = i;
-			newIPT->virtualPageNumber = idx;
-			newIPT->frameNumber = newestFrame->number;
-			newIPT->next = NULL;
 
-			iPT[hashIdx].next = newIPT;
+			struct invertedPageTableEntry *newiPT = CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 0);
 
 			// page-out : 대체될 경우 phyMemFrame에 hashTable에서 할당하고 있는 entry 삭제
 			if (fullFrame) {
+				int bpid, bidx, hidx;
 				bpid = phyMemFrames[newestFrame->number].pid;
 				bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
-				hidx = phyMemFrames[newestFrame->number].hashEntryNumber;
+				hidx = (bpid + bidx) % nFrame;
+			//	printf("%x %d \n",bidx, hidx);
 				struct invertedPageTableEntry *nIPT;	// 삭제할 entry
-				nIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
 				struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
-				bIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
 				nIPT = iPT[hidx].next;
-
+				bIPT = &iPT[hidx];
+			//	printf("%x %x %x %d \n",iPT[hidx].virtualPageNumber, nIPT->virtualPageNumber, bIPT->next->virtualPageNumber, hidx);
+			//	printf("%d \n" ,bidx*PageSize);
 				// Search
 				while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
+					if(nIPT->next == NULL) break;
 					bIPT = nIPT;
 					nIPT = nIPT->next;
-				}
+                        	}
+
 				// 못 찾은경우 error
-				if (nIPT->pid != bpid || nIPT->frameNumber != bidx) {
-					printf("HashTable에 삭제할 entry가 존재하지 않습니다 \n");
+				if (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
+					printf("HashTable에 삭제할 entry가 존재하지 않습니다empty \n");
 					exit(1);
 				}
 				// 찾은 entry의 next가 있는 경우 
-				if (nIPT->next != NULL) {
-					bIPT->next = nIPT->next;
-				}
-				free(nIPT);
-				free(bIPT);
+				bIPT->next = nIPT->next;
 			}
+
 
 			// Write in phyMemFrameTable			
 			phyMemFrames[newestFrame->number].pid = i;
 			phyMemFrames[newestFrame->number].virtualPageNumber = idx;
-			phyMemFrames[newestFrame->number].hashEntryNumber = hashIdx;
-
+			phyMemFrames[newestFrame->number].number = newestFrame->number;
 			// 모든 Frame들이 사용되고 있는 경우 oldestFrame의 포인터를 오른쪽으로 이동
 			if (fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
 			if (newestFrame->number == nFrame - 1) fullFrame = 1;
@@ -379,21 +386,21 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 		// Collision 
 		else {
-			procTable[i].numIHTConflictAccess++;
 			procTable[i].numIHTNonNULLAcess++;
 			struct invertedPageTableEntry *cIPT;	// 찾을 entry
-			cIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
-			struct invertedPageTableEntry *dIPT;	// cIPT를 링크하고 있는 entry
-			dIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
 			cIPT = iPT[hashIdx].next; 
-			while (cIPT->pid != i || cIPT->virtualPageNumber != idx) {
-				dIPT = cIPT;
+
+			procTable[i].numIHTConflictAccess++;
+
+			while (1){
+				if(cIPT->next == NULL || cIPT->pid == i && cIPT->virtualPageNumber == idx) break;
 				cIPT = cIPT->next;
 				procTable[i].numIHTConflictAccess++;
 			}
 
 			// entry에서 찾은 경우 pageHit
-			if (cIPT->pid == i || cIPT->virtualPageNumber == idx) {
+			if (cIPT->pid == i && cIPT->virtualPageNumber == idx) {
+			//	printf("HIT %d\n" , hashIdx);
 				procTable[i].numPageHit++;
 				fnum = cIPT->frameNumber;
 				Paddr += fnum * PageSize;
@@ -410,50 +417,44 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 			// 못 찾은 경우 pageFault
 			else {
+			//	printf("COL MISS %d\n", hashIdx);
 				procTable[i].numPageFault++;
-				// 새로 만들어 entry 맨 앞에 붙인다.
-				struct invertedPageTableEntry *new1IPT;
-				new1IPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
-				new1IPT->pid = i;
-				new1IPT->virtualPageNumber = idx;
-				new1IPT->frameNumber = newestFrame->number;
-				// 선두에 entry 추가
-				new1IPT->next = iPT[hashIdx].next;
-				iPT[hashIdx].next = new1IPT;
+
+				struct invertedPageTableEntry *newIPT  = CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 1);
 
 				// page-out : 대체될 경우 phyMemFrame에 hashTable에서 할당하고 있는 entry 삭제
 				if (fullFrame) {
+					int bpid, bidx, hidx;
 					bpid = phyMemFrames[newestFrame->number].pid;
 					bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
-					hidx = phyMemFrames[newestFrame->number].hashEntryNumber;
-					struct invertedPageTableEntry *nIPT;	// 삭제할 entry
-					nIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
-					struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
-					bIPT = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
-					nIPT = iPT[hidx].next;
-
+					hidx = (bpid+bidx)%nFrame;
+					struct invertedPageTableEntry *n2IPT;	// 삭제할 entry
+					struct invertedPageTableEntry *b2IPT;	// n2IPT를 링크하고 있는 entry
+					n2IPT = iPT[hidx].next;
+					b2IPT = &iPT[hidx];
+			//		printf("frame 속 pid, vpn %d %x %x\n", bpid, bidx, hidx);
+			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
+		
 					// Search
-					while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
-						bIPT = nIPT;
-						nIPT = nIPT->next;
+					while (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
+						if(n2IPT->next == NULL) break;
+						b2IPT = n2IPT;
+						n2IPT = n2IPT->next;
 					}
+			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
 					// 못 찾은경우 error
-					if (nIPT->pid != bpid || nIPT->frameNumber != bidx) {
+					if (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
 						printf("HashTable에 삭제할 entry가 존재하지 않습니다 \n");
-						exit(1);
 					}
-					// 찾은 entry의 next가 있는 경우 
-					if (nIPT->next != NULL) {
-						bIPT->next = nIPT->next;
-					}
-					free(nIPT);
-					free(bIPT);
+					b2IPT->next = n2IPT->next;
+					
+					
 				}
 
 				// Write in phyMemFrameTable			
 				phyMemFrames[newestFrame->number].pid = i;
 				phyMemFrames[newestFrame->number].virtualPageNumber = idx;
-				phyMemFrames[newestFrame->number].hashEntryNumber = hashIdx;
+				phyMemFrames[newestFrame->number].number = newestFrame->number;
 
 				// 모든 Frame들이 사용되고 있는 경우 oldestFrame의 포인터를 오른쪽으로 이동
 				if (fullFrame) oldestFrame = &phyMemFrames[oldestFrame->lruRight->number];
@@ -467,11 +468,9 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 				// oldestFrame을 교체해야하는 경우
 				if (fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
-
-				free(new1IPT);
+				
 			}
 		}
-
 		procTable[i].ntraces++;
 
 		// -s option print statement
@@ -487,10 +486,11 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 		printf("Proc %d Num of Page Hit %d\n", i, procTable[i].numPageHit);
 		assert(procTable[i].numPageHit + procTable[i].numPageFault == procTable[i].ntraces);
 		assert(procTable[i].numIHTNULLAccess + procTable[i].numIHTNonNULLAcess == procTable[i].ntraces);
+		free(procTable[i].firstLevelPageTable);
 	}
+	free(iPT);
 	
 }
-
 int main(int argc, char *argv[]) {
 	int i;
 
@@ -580,10 +580,8 @@ int main(int argc, char *argv[]) {
 		initPhyMem(phyMemFrames, nFrame);
 		initprocTable(procTable, numProcess, 0, 1);
 		// call invertedPageVMsim()
-		invertedPageVMSim(procTable, phyMemFrames);
+		invertedPageVMSim(procTable, phyMemFrames, nFrame);
 	}
 
 	return(0);
 }
-
-

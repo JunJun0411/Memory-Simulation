@@ -1,4 +1,4 @@
-// 
+/*// 
 // Virual Memory Simulator Homework
 // One-level page table system with FIFO and LRU
 // Two-level page table system with LRU
@@ -121,7 +121,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 	char rw;
 	char fullFrame = 0;
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
-		
+
 		// offset
 		Paddr = (Vaddr % PageSize);
 		// VPN
@@ -158,6 +158,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 			// 모든 Frame 사용되는 중이며 LRU의경우에서 oldestFrame 교체해야하는 경우
 			if (FIFOorLRU && fullFrame) newestFrame = &phyMemFrames[oldestFrame->number];
 		}
+	
 
 		// Hit
 		else {
@@ -185,7 +186,7 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 
 		// -s option print statement
 		if (s_flag) printf("One-Level procID %d traceNumber %d virtual addr %x physical addr %x\n", i, procTable[i].ntraces, Vaddr, Paddr);
-	}
+		}
 
 	// 출력	
 	for (i = 0; i < numProcess; i++) {
@@ -588,3 +589,4 @@ int main(int argc, char *argv[]) {
 
 	return(0);
 }
+*/
