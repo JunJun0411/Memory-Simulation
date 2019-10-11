@@ -1,4 +1,4 @@
-/*// 
+// 
 // Virual Memory Simulator Homework
 // One-level page table system with FIFO and LRU
 // Two-level page table system with LRU
@@ -18,7 +18,7 @@ const unsigned PageSize = 1 << PAGESIZEBITS;	// page size = 4Kbytes
 
 struct pageTableEntry {
 	int level;										// page table level (1 or 2)
-	char valid;
+	int valid;
 	struct pageTableEntry *secondLevelPageTable;	// valid if this entry is for the first level page table (level = 1)
 	int frameNumber;								// valid if this entry is for the second level page table (level = 2)
 };
@@ -59,6 +59,16 @@ int firstLevelBits, twoLevelBits, phyMemSizeBits, numProcess;
 int s_flag = 0;
 int nFrame;
 
+void initPageTableEntry(struct pageTableEntry * pte, int num){
+	int i;
+	for(i=0; i<num; i++){
+		pte[i].level=0;
+		pte[i].valid=0;
+		pte[i].frameNumber=-1;
+		pte[i].secondLevelPageTable = NULL;
+	}
+}
+
 void initPhyMem(struct framePage *phyMem, int nFrame) {
 	int i;
 	for(i = 0; i < nFrame; i++) {
@@ -73,13 +83,14 @@ void initPhyMem(struct framePage *phyMem, int nFrame) {
 	oldestFrame = &phyMem[0];
 	newestFrame = &phyMem[0];
 }
-void initprocTable(struct procEntry *procTable, int numProcess, int bits, char invertedVirsion){
+void initprocTable(struct procEntry *procTable, int numProcess){
 	int i;
 	// initialize procTable for the simulation
 	for (i = 0; i < numProcess; i++) {
 		// initialize procTable fields
 		// rewind tracefiles
 		rewind(procTable[i].tracefp);
+		procTable[i].pid = i;
 		procTable[i].ntraces = 0;
 		procTable[i].num2ndLevelPageTable = 0;
 		procTable[i].numIHTConflictAccess = 0;
@@ -87,7 +98,6 @@ void initprocTable(struct procEntry *procTable, int numProcess, int bits, char i
 		procTable[i].numIHTNULLAccess = 0;
 		procTable[i].numPageFault = 0;
 		procTable[i].numPageHit = 0;
-		if(!invertedVirsion) procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << bits));
 	}
 }
 void initinvertedPageTableEntry(struct invertedPageTableEntry *inverted, int nFrame) {
@@ -120,6 +130,12 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 	unsigned Vaddr, Paddr, idx;
 	char rw;
 	char fullFrame = 0;
+	
+	// firstLevelPageTable 메모리 할당
+	for(i=0; i<numProcess; i++){
+		 procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << VIRTUALADDRBITS - PAGESIZEBITS));
+		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << VIRTUALADDRBITS - PAGESIZEBITS) );
+	}
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 
 		// offset
@@ -204,6 +220,11 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
 	char fullFrame = 0;
+	for(i=0; i<numProcess; i++){
+                 procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << firstLevelBits));
+		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << firstLevelBits) );
+        }
+
 
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
@@ -223,6 +244,8 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 				procTable[i].firstLevelPageTable[idxF].valid = 1;
 				procTable[i].firstLevelPageTable[idxF].level = 1;
 				procTable[i].firstLevelPageTable[idxF].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << twoLevelBits));
+				 initPageTableEntry(procTable[i].firstLevelPageTable[idxF].secondLevelPageTable, (1 << twoLevelBits) );
+				
 				procTable[i].num2ndLevelPageTable++;
 			}
 			// Write in secondLevelPage
@@ -288,11 +311,14 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 		printf("Proc %d Num of Page Faults %d\n", i, procTable[i].numPageFault);
 		printf("Proc %d Num of Page Hit %d\n", i, procTable[i].numPageHit);
 		assert(procTable[i].numPageHit + procTable[i].numPageFault == procTable[i].ntraces);
-		for (j = 0; j < (1 << firstLevelBits); j++) free(procTable[i].firstLevelPageTable[j].secondLevelPageTable);
+		for (j = 0; j < (1 << firstLevelBits); j++){ 
+			if(procTable[i].firstLevelPageTable[j].valid){
+				free(procTable[i].firstLevelPageTable[j].secondLevelPageTable);
+			}
+		}
 		free(procTable[i].firstLevelPageTable);
 	}
 }
-
 struct invertedPageTableEntry* CreateNode(int id, int vpn, int newNum ,struct invertedPageTableEntry *hashIPT, char check) { 
 	struct invertedPageTableEntry * NewNode = (struct invertedPageTableEntry *)malloc(sizeof(struct invertedPageTableEntry));
 	NewNode->pid = id; 
@@ -306,8 +332,6 @@ struct invertedPageTableEntry* CreateNode(int id, int vpn, int newNum ,struct in
 
 	return NewNode; 
 }
-
-
 void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, int nFrame) {
 	int i, fnum;
 	unsigned Vaddr, Paddr, hashIdx, idx;
@@ -489,12 +513,10 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 		printf("Proc %d Num of Page Hit %d\n", i, procTable[i].numPageHit);
 		assert(procTable[i].numPageHit + procTable[i].numPageFault == procTable[i].ntraces);
 		assert(procTable[i].numIHTNULLAccess + procTable[i].numIHTNonNULLAcess == procTable[i].ntraces);
-		free(procTable[i].firstLevelPageTable);
 	}
 	free(iPT);
 	
 }
-
 int main(int argc, char *argv[]) {
 	int i;
 
@@ -531,8 +553,6 @@ int main(int argc, char *argv[]) {
 		printf("process %d opening %s\n", i, procTable[i].traceName = argv[i + s_flag + 4]);
 		procTable[i].tracefp = fopen(argv[i + s_flag + 4], "r");
 		procTable[i].traceName = argv[i + s_flag + 4];
-		procTable[i].pid = i;
-
 	}
 
 	// Frame 갯수
@@ -550,7 +570,7 @@ int main(int argc, char *argv[]) {
 		printf("The One-Level Page Table with FIFO Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
 		initPhyMem(phyMemFrames, nFrame);
-		initprocTable(procTable, numProcess, VIRTUALADDRBITS - PAGESIZEBITS, 0);
+		initprocTable(procTable, numProcess);
 		// call oneLevelVMSim() with FIFO
 		oneLevelVMSim(procTable, phyMemFrames, 0);
 
@@ -558,19 +578,18 @@ int main(int argc, char *argv[]) {
 		printf("The One-Level Page Table with LRU Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
 		initPhyMem(phyMemFrames, nFrame);
-		initprocTable(procTable, numProcess, VIRTUALADDRBITS - PAGESIZEBITS, 0);
+		initprocTable(procTable, numProcess);
 		// call oneLevelVMSim() with LRU
 		oneLevelVMSim(procTable, phyMemFrames, 1);
-
 	}
 	// twoLevel일 경우
-	if (argv[s_flag + 1][0] == '1' || argv[s_flag + 1][0] == '3') {
+	if (argv[s_flag + 1][0] == '1' || argv[s_flag + 1][0] == '3'){
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
 		printf("The Two-Level Page Table Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
 		initPhyMem(phyMemFrames, nFrame);
-		initprocTable(procTable, numProcess, firstLevelBits, 0);
+		initprocTable(procTable, numProcess);
 		// call twoLevelVMSim()
 		twoLevelVMSim(procTable, phyMemFrames);
 	}
@@ -582,11 +601,10 @@ int main(int argc, char *argv[]) {
 		printf("The Inverted Page Table Memory Simulation Starts .....\n");
 		printf("=============================================================\n");
 		initPhyMem(phyMemFrames, nFrame);
-		initprocTable(procTable, numProcess, 0, 1);
+		initprocTable(procTable, numProcess);
 		// call invertedPageVMsim()
 		invertedPageVMSim(procTable, phyMemFrames, nFrame);
 	}
 
 	return(0);
 }
-*/
