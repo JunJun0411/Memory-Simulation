@@ -139,9 +139,9 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 
 		// offset
-		Paddr = (Vaddr & 0x00000FFF);
+		Paddr = (Vaddr % PageSize);
 		// VPN
-		idx = ((Vaddr & 0xFFFFF000) >> PAGESIZEBITS);
+		idx = (Vaddr / PageSize);
 
 		// Miss
 		if (procTable[i].firstLevelPageTable[idx].valid == 0) {
@@ -220,7 +220,6 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
 	char fullFrame = 0;
-	// oneLevelPageTable 할당
 	for(i=0; i<numProcess; i++){
                  procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << firstLevelBits));
 		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << firstLevelBits) );
@@ -229,11 +228,11 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
-		Paddr = (Vaddr & 0x00000FFF);
+		Paddr = (Vaddr % PageSize);
 		// twoLevelIndex
-		idxT = (((Vaddr & 0xFFFFF000) << firstLevelBits) >> (PAGESIZEBITS + firstLevelBits));
+		idxT = ((Vaddr % (1 << (PAGESIZEBITS + twoLevelBits))) / PageSize);
 		// oneLevelIndex
-		idxF = ((Vaddr & 0xFFFFF000) >> (PAGESIZEBITS + twoLevelBits));
+		idxF = (Vaddr / (1 << (PAGESIZEBITS + twoLevelBits)));
 
 		// Miss 1LevelPage.vaild=0 인경우 2LevelPage.vaild=0인경우
 		if (procTable[i].firstLevelPageTable[idxF].valid == 0 || procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid == 0) {
@@ -349,14 +348,15 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 	
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
-		Paddr = (Vaddr & 0x00000FFF);
+		Paddr = (Vaddr % PageSize);
 		// VPN
-		idx = ((Vaddr & 0xFFFFF000) >> PAGESIZEBITS);
+		idx = (Vaddr / PageSize);
 		// 해싱 후 Index
 		hashIdx = (i + idx) % nFrame;
 
 		// Empty entry일 경우
 		if (iPT[hashIdx].next == NULL) {
+	//		printf("Empty MISS %d\n", hashIdx);
 			procTable[i].numIHTNULLAccess++;
 			procTable[i].numPageFault++;
 
@@ -368,10 +368,13 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 				bpid = phyMemFrames[newestFrame->number].pid;
 				bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
 				hidx = (bpid + bidx) % nFrame;
+			//	printf("%x %d \n",bidx, hidx);
 				struct invertedPageTableEntry *nIPT;	// 삭제할 entry
 				struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
 				nIPT = iPT[hidx].next;
 				bIPT = &iPT[hidx];
+			//	printf("%x %x %x %d \n",iPT[hidx].virtualPageNumber, nIPT->virtualPageNumber, bIPT->next->virtualPageNumber, hidx);
+			//	printf("%d \n" ,bidx*PageSize);
 				// Search
 				while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
 					if(nIPT->next == NULL) break;
@@ -441,6 +444,7 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 			// 못 찾은 경우 pageFault
 			else {
+			//	printf("COL MISS %d\n", hashIdx);
 				procTable[i].numPageFault++;
 
 				CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 1);
@@ -455,6 +459,8 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 					struct invertedPageTableEntry *b2IPT;	// n2IPT를 링크하고 있는 entry
 					n2IPT = iPT[hidx].next;
 					b2IPT = &iPT[hidx];
+			//		printf("frame 속 pid, vpn %d %x %x\n", bpid, bidx, hidx);
+			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
 		
 					// Search
 					while (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
@@ -462,6 +468,7 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 						b2IPT = n2IPT;
 						n2IPT = n2IPT->next;
 					}
+			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
 					// 못 찾은경우 error
 					if (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
 						printf("HashTable에 삭제할 entry가 존재하지 않습니다 \n");

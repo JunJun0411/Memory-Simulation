@@ -1,4 +1,4 @@
-// 
+// Operate System 운영 체제
 // Virual Memory Simulator Homework
 // One-level page table system with FIFO and LRU
 // Two-level page table system with LRU
@@ -133,15 +133,15 @@ void oneLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, 
 	
 	// firstLevelPageTable 메모리 할당
 	for(i=0; i<numProcess; i++){
-		 procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << VIRTUALADDRBITS - PAGESIZEBITS));
-		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << VIRTUALADDRBITS - PAGESIZEBITS) );
+		 procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << (VIRTUALADDRBITS - PAGESIZEBITS)));
+		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << (VIRTUALADDRBITS - PAGESIZEBITS) ));
 	}
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 
 		// offset
-		Paddr = (Vaddr % PageSize);
+		Paddr = (Vaddr & 0x00000FFF);
 		// VPN
-		idx = (Vaddr / PageSize);
+		idx = ((Vaddr & 0xFFFFF000) >> PAGESIZEBITS);
 
 		// Miss
 		if (procTable[i].firstLevelPageTable[idx].valid == 0) {
@@ -220,6 +220,7 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 	unsigned Vaddr, Paddr, idxF, idxT;
 	char rw;
 	char fullFrame = 0;
+	// oneLevelPageTable 할당
 	for(i=0; i<numProcess; i++){
                  procTable[i].firstLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << firstLevelBits));
 		 initPageTableEntry(procTable[i].firstLevelPageTable, (1 << firstLevelBits) );
@@ -228,11 +229,11 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
-		Paddr = (Vaddr % PageSize);
+		Paddr = (Vaddr & 0x00000FFF);
 		// twoLevelIndex
-		idxT = ((Vaddr % (1 << (PAGESIZEBITS + twoLevelBits))) / PageSize);
+		idxT = (((Vaddr & 0xFFFFF000) << firstLevelBits) >> (PAGESIZEBITS + firstLevelBits));
 		// oneLevelIndex
-		idxF = (Vaddr / (1 << (PAGESIZEBITS + twoLevelBits)));
+		idxF = ((Vaddr & 0xFFFFF000) >> (PAGESIZEBITS + twoLevelBits));
 
 		// Miss 1LevelPage.vaild=0 인경우 2LevelPage.vaild=0인경우
 		if (procTable[i].firstLevelPageTable[idxF].valid == 0 || procTable[i].firstLevelPageTable[idxF].secondLevelPageTable[idxT].valid == 0) {
@@ -244,7 +245,7 @@ void twoLevelVMSim(struct procEntry *procTable, struct framePage *phyMemFrames) 
 				procTable[i].firstLevelPageTable[idxF].valid = 1;
 				procTable[i].firstLevelPageTable[idxF].level = 1;
 				procTable[i].firstLevelPageTable[idxF].secondLevelPageTable = (struct pageTableEntry *)malloc(sizeof(struct pageTableEntry) * (1 << twoLevelBits));
-				 initPageTableEntry(procTable[i].firstLevelPageTable[idxF].secondLevelPageTable, (1 << twoLevelBits) );
+				initPageTableEntry(procTable[i].firstLevelPageTable[idxF].secondLevelPageTable, (1 << twoLevelBits) );
 				
 				procTable[i].num2ndLevelPageTable++;
 			}
@@ -333,8 +334,8 @@ struct invertedPageTableEntry* CreateNode(int id, int vpn, int newNum ,struct in
 	return NewNode; 
 }
 void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFrames, int nFrame) {
-	int i, fnum;
-	unsigned Vaddr, Paddr, hashIdx, idx;
+	int i, fnum, idx;
+	unsigned Vaddr, Paddr, hashIdx;
 	char rw;
 	char fullFrame = 0;
 
@@ -348,19 +349,18 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 	
 	for (i = 0; EOF != fscanf(procTable[i].tracefp, "%x %c", &Vaddr, &rw); i = (i + 1) % numProcess) {
 		// offset
-		Paddr = (Vaddr % PageSize);
+		Paddr = (Vaddr & 0x00000FFF);
 		// VPN
-		idx = (Vaddr / PageSize);
+		idx = ((Vaddr & 0xFFFFF000) >> PAGESIZEBITS);
 		// 해싱 후 Index
 		hashIdx = (i + idx) % nFrame;
 
 		// Empty entry일 경우
 		if (iPT[hashIdx].next == NULL) {
-	//		printf("Empty MISS %d\n", hashIdx);
 			procTable[i].numIHTNULLAccess++;
 			procTable[i].numPageFault++;
 
-			struct invertedPageTableEntry *newiPT = CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 0);
+			CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 0);
 
 			// page-out : 대체될 경우 phyMemFrame에 hashTable에서 할당하고 있는 entry 삭제
 			if (fullFrame) {
@@ -368,13 +368,10 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 				bpid = phyMemFrames[newestFrame->number].pid;
 				bidx = phyMemFrames[newestFrame->number].virtualPageNumber;
 				hidx = (bpid + bidx) % nFrame;
-			//	printf("%x %d \n",bidx, hidx);
 				struct invertedPageTableEntry *nIPT;	// 삭제할 entry
 				struct invertedPageTableEntry *bIPT;	// nIPT를 링크하고 있는 entry
 				nIPT = iPT[hidx].next;
 				bIPT = &iPT[hidx];
-			//	printf("%x %x %x %d \n",iPT[hidx].virtualPageNumber, nIPT->virtualPageNumber, bIPT->next->virtualPageNumber, hidx);
-			//	printf("%d \n" ,bidx*PageSize);
 				// Search
 				while (nIPT->pid != bpid || nIPT->virtualPageNumber != bidx) {
 					if(nIPT->next == NULL) break;
@@ -420,13 +417,13 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 			procTable[i].numIHTConflictAccess++;
 
 			while (1){
-				if(cIPT->next == NULL || cIPT->pid == i && cIPT->virtualPageNumber == idx) break;
+				if((cIPT->next == NULL) || ((cIPT->pid == i) && (cIPT->virtualPageNumber == idx))) break;
 				cIPT = cIPT->next;
 				procTable[i].numIHTConflictAccess++;
 			}
 
 			// entry에서 찾은 경우 pageHit
-			if (cIPT->pid == i && cIPT->virtualPageNumber == idx) {
+			if ((cIPT->pid == i) && (cIPT->virtualPageNumber == idx)) {
 			//	printf("HIT %d\n" , hashIdx);
 				procTable[i].numPageHit++;
 				fnum = cIPT->frameNumber;
@@ -444,10 +441,9 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 
 			// 못 찾은 경우 pageFault
 			else {
-			//	printf("COL MISS %d\n", hashIdx);
 				procTable[i].numPageFault++;
 
-				struct invertedPageTableEntry *newIPT  = CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 1);
+				CreateNode(i, idx, newestFrame->number, &iPT[hashIdx], 1);
 
 				// page-out : 대체될 경우 phyMemFrame에 hashTable에서 할당하고 있는 entry 삭제
 				if (fullFrame) {
@@ -459,8 +455,6 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 					struct invertedPageTableEntry *b2IPT;	// n2IPT를 링크하고 있는 entry
 					n2IPT = iPT[hidx].next;
 					b2IPT = &iPT[hidx];
-			//		printf("frame 속 pid, vpn %d %x %x\n", bpid, bidx, hidx);
-			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
 		
 					// Search
 					while (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
@@ -468,7 +462,6 @@ void invertedPageVMSim(struct procEntry *procTable, struct framePage *phyMemFram
 						b2IPT = n2IPT;
 						n2IPT = n2IPT->next;
 					}
-			//		printf("링크 속 pid, vpn %d %x %x\n", n2IPT->pid, n2IPT->virtualPageNumber, hidx);
 					// 못 찾은경우 error
 					if (n2IPT->pid != bpid || n2IPT->virtualPageNumber != bidx) {
 						printf("HashTable에 삭제할 entry가 존재하지 않습니다 \n");
@@ -564,7 +557,7 @@ int main(int argc, char *argv[]) {
 	phyMemFrames = (struct framePage *)malloc(sizeof(struct framePage) * nFrame);
 	
 	// oneLevel일 경우
-	if (argv[s_flag + 1][0] == '0' || argv[s_flag + 1][0] == '3') {
+	if (argv[s_flag + 1][0] == '0' || argv[s_flag + 1][0] >= '3') {
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
 		printf("The One-Level Page Table with FIFO Memory Simulation Starts .....\n");
@@ -583,7 +576,7 @@ int main(int argc, char *argv[]) {
 		oneLevelVMSim(procTable, phyMemFrames, 1);
 	}
 	// twoLevel일 경우
-	if (argv[s_flag + 1][0] == '1' || argv[s_flag + 1][0] == '3'){
+	if (argv[s_flag + 1][0] == '1' || argv[s_flag + 1][0] >= '3'){
 		// initialize procTable for the simulation
 		printf("=============================================================\n");
 		printf("The Two-Level Page Table Memory Simulation Starts .....\n");
@@ -594,7 +587,7 @@ int main(int argc, char *argv[]) {
 		twoLevelVMSim(procTable, phyMemFrames);
 	}
 	// inverted의 경우
-	if (argv[s_flag + 1][0] == '2' || argv[s_flag + 1][0] == '3') {
+	if (argv[s_flag + 1][0] == '2' || argv[s_flag + 1][0] >= '3') {
 
 		// initialize procTable for the simulation
 		printf("=============================================================\n");

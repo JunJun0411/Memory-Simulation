@@ -15,8 +15,9 @@ for i in range(1, 4):
 subprocess.call("gcc -o memsimhw memsimhw.c -O2 -W -Wall", shell=True)
  
 i = 1
+f = open("errorline.txt", 'a');
 while True:
-    simType = 1#random.randint(0, 3)
+    simType = 3#random.randint(0, 3)
     firstLvBits = random.randint(0, 21)
     phyMem = random.randint(12, 32)
     traces = random.choice(trace_args)
@@ -39,16 +40,15 @@ while True:
     e = time.time()
     answerf = "\n".join([line.strip() for line in answer.split('\n') if "Proc" in line])
     minef = "\n".join([line.strip() for line in mine.split('\n') if "Proc" in line])
-    
+	    
+
     if answerf == minef and (e - s) < 600: 
         print(i,[firstLvBits, phyMem]+traces, "PASSED", e - s)
     else:
         print(answer)
         print(mine)
         print(" ".join(args))
-        exit(1)
-    
+   	f.write(" ".join(args));
+	f.write("\n");
     
     i += 1
-    if i > 100 : 
-        break
