@@ -68,7 +68,7 @@ void initPageTableEntry(struct pageTableEntry * pte, int num){
 		pte[i].secondLevelPageTable = NULL;
 	}
 }
-
+ 
 void initPhyMem(struct framePage *phyMem, int nFrame) {
 	int i;
 	for(i = 0; i < nFrame; i++) {
