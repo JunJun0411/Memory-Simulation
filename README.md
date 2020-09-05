@@ -1,8 +1,8 @@
-운영체제 프로그래밍 과제  
+운영체제 프로그래밍
 =================
 
 ## < Virtual Memory Management Simulator >
-이번 프로그래밍 과제 수업 시간에 배운 Virtual Memory Systems에서 one-level, two-level
+이번 프로그래밍은 수업 시간에 배운 Virtual Memory Systems에서 one-level, two-level
 Page Table 과 Inverted Page Table system을 구현하여 시뮬레이션 해 보는 것입니다. 제공
 되는 mtraces 디렉토리에 실제 프로그램 수행 중 접근한 메모리의 주소(Virtual address)를 순
 차적으로 모아 놓은 memory trace가 있습니다. 각각의 trace file에 들어 있는 memory trace
@@ -16,7 +16,7 @@ Page Table 과 Inverted Page Table system을 구현하여 시뮬레이션 해 �
    
 앞의 8문자는 접근된 메모리의 주소를 16진수로 나타낸 것이고(32bits) 그 뒤의 R 또는 W 해당
 메모리 주소에 Read를 하는지 Write를 하는지 각각을 나타냅니다. 이 trace는 다음 코드
-(fscanf())를 사용하여 읽어 들이면 됩니다. (본 과제에서 R/W 는 중요하지 않습니다.)
+(fscanf())를 사용하여 읽어 들이면 됩니다. (본 문제에서 R/W 는 중요하지 않습니다.)
 <pre><code>unsigned addr;
  char rw;
  ...
